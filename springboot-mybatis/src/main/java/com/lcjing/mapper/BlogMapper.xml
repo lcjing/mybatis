@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lcjing.mapper.BlogMapper">
+    <!--声明这个namespace开启二级缓存-->
+    <cache type="org.apache.ibatis.cache.impl.PerpetualCache"
+           size="1024"
+           eviction="LRU"
+           flushInterval="120000"
+           readOnly="false"/>
+
+    <resultMap id="BaseResultMap" type="com.lcjing.model.Blog">
+        <id column="bid" jdbcType="INTEGER" property="bid"/>
+        <!--   <result column="name" property="name" jdbcType="VARCHAR" typeHandler="com.lcjing.type.MyTypeHandler"/>-->
+        <result column="name" jdbcType="VARCHAR" property="name"/>
+        <result column="author_id" jdbcType="INTEGER" property="authorId"/>
+    </resultMap>
+
+    <!-- 根据文章查询作者，一对一查询的结果，嵌套查询 -->
+    <resultMap id="BlogWithAuthorResultMap" type="com.lcjing.model.associate.BlogAndAuthor">
+        <id column="bid" property="bid" jdbcType="INTEGER"/>
+        <result column="name" property="name" jdbcType="VARCHAR"/>
+        <!-- 联合查询，将author的属性映射到ResultMap -->
+        <association property="author" javaType="com.lcjing.model.Author">
+            <id column="author_id" property="authorId"/>
+            <result column="author_name" property="authorName"/>
+        </association>
+    </resultMap>
+
+    <!-- 另一种联合查询(一对一)的实现，但是这种方式有“N+1”的问题 -->
+    <resultMap id="BlogWithAuthorQueryMap" type="com.lcjing.model.associate.BlogAndAuthor">
+        <id column="bid" property="bid" jdbcType="INTEGER"/>
+        <result column="name" property="name" jdbcType="VARCHAR"/>
+        <association property="author" javaType="com.lcjing.model.Author"
+                     column="author_id" select="selectAuthor"/> <!-- selectAuthor 定义在下面-->
+    </resultMap>
+
+    <!--  查询文章带评论的结果（一对多） -->
+    <resultMap id="BlogWithCommentMap" type="com.lcjing.model.associate.BlogAndComment" extends="BaseResultMap">
+        <collection property="comment" ofType="com.lcjing.model.Comment">
+            <id column="comment_id" property="commentId"/>
+            <result column="content" property="content"/>
+        </collection>
+    </resultMap>
+
+    <!--  按作者查询文章评论的结果（多对多） -->
+    <resultMap id="AuthorWithBlogMap" type="com.lcjing.model.associate.AuthorAndBlog">
+        <id column="author_id" property="authorId" jdbcType="INTEGER"/>
+        <result column="author_name" property="authorName" jdbcType="VARCHAR"/>
+        <collection property="blog" ofType="com.lcjing.model.associate.BlogAndComment">
+            <id column="bid" property="bid"/>
+            <result column="name" property="name"/>
+            <result column="author_id" property="authorId"/>
+            <collection property="comment" ofType="com.lcjing.model.Comment">
+                <id column="comment_id" property="commentId"/>
+                <result column="content" property="content"/>
+            </collection>
+        </collection>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+    bid, name, author_id
+  </sql>
+    <select id="selectByPrimaryKey" parameterType="java.lang.Integer" resultMap="BaseResultMap">
+        select
+        <include refid="Base_Column_List"/>
+        from blog
+        where bid = #{bid,jdbcType=INTEGER}
+    </select>
+    <delete id="deleteByPrimaryKey" parameterType="java.lang.Integer">
+    delete from blog
+    where bid = #{bid,jdbcType=INTEGER}
+  </delete>
+    <insert id="insert" parameterType="com.lcjing.model.Blog">
+    insert into blog (bid, name, author_id
+      )
+    values (#{bid,jdbcType=INTEGER}, #{name,jdbcType=VARCHAR}, #{authorId,jdbcType=INTEGER}
+      )
+  </insert>
+    <insert id="insertSelective" parameterType="com.lcjing.model.Blog">
+        insert into blog
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="bid != null">
+                bid,
+            </if>
+            <if test="name != null">
+                name,
+            </if>
+            <if test="authorId != null">
+                author_id,
+            </if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="bid != null">
+                #{bid,jdbcType=INTEGER},
+            </if>
+            <if test="name != null">
+                #{name,jdbcType=VARCHAR},
+            </if>
+            <if test="authorId != null">
+                #{authorId,jdbcType=INTEGER},
+            </if>
+        </trim>
+    </insert>
+    <update id="updateByPrimaryKeySelective" parameterType="com.lcjing.model.Blog">
+        update blog
+        <set>
+            <if test="name != null">
+                name = #{name,jdbcType=VARCHAR},
+            </if>
+            <if test="authorId != null">
+                author_id = #{authorId,jdbcType=INTEGER},
+            </if>
+        </set>
+        where bid = #{bid,jdbcType=INTEGER}
+    </update>
+    <update id="updateByPrimaryKey" parameterType="com.lcjing.model.Blog">
+    update blog
+    set name = #{name,jdbcType=VARCHAR},
+      author_id = #{authorId,jdbcType=INTEGER}
+    where bid = #{bid,jdbcType=INTEGER}
+  </update>
+
+    <!-- 动态SQL trim -->
+    <insert id="insertBlog" parameterType="com.lcjing.model.Blog">
+        insert into blog
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="bid != null">
+                bid,
+            </if>
+            <if test="name != null">
+                name,
+            </if>
+            <if test="authorId != null">
+                author_id,
+            </if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="bid != null">
+                #{bid,jdbcType=INTEGER},
+            </if>
+            <if test="name != null">
+                #{name,jdbcType=VARCHAR},
+
+            </if>
+            <if test="authorId != null">
+                #{authorId,jdbcType=INTEGER},
+            </if>
+        </trim>
+    </insert>
+
+    <!-- foreach 动态SQL 批量插入 -->
+    <insert id="insertBlogList" parameterType="java.util.List">
+        insert into blog (bid, name, author_id)
+        values
+        <foreach collection="list" item="blogs" index="index" separator=",">
+            ( #{blogs.bid},#{blogs.name},#{blogs.authorId} )
+        </foreach>
+    </insert>
+
+    <!-- foreach 动态SQL 批量更新-->
+    <update id="updateBlogList">
+        update blog set
+        name =
+        <foreach collection="list" item="blogs" index="index" separator=" " open="case bid" close="end">
+            when #{blogs.bid} then #{blogs.name}
+        </foreach>
+        ,author_id =
+        <foreach collection="list" item="blogs" index="index" separator=" " open="case bid" close="end">
+            when #{blogs.bid} then #{blogs.authorId}
+        </foreach>
+        where bid in
+        <foreach collection="list" item="item" open="(" separator="," close=")">
+            #{item.bid,jdbcType=INTEGER}
+        </foreach>
+    </update>
+    <!-- 根据文章查询作者，一对一，嵌套结果，无N+1问题 -->
+    <select id="selectBlogWithAuthorResult" resultMap="BlogWithAuthorResultMap">
+        select b.bid, b.name, b.author_id, a.author_id , a.author_name
+        from blog b
+        left join author a
+        on b.author_id=a.author_id
+        where b.bid = #{bid, jdbcType=INTEGER}
+    </select>
+    <!-- 根据文章查询作者，一对一，嵌套查询，存在N+1问题，可通过开启延迟加载解决 -->
+    <select id="selectBlogWithAuthorQuery" resultMap="BlogWithAuthorQueryMap">
+        select b.bid, b.name, b.author_id, a.author_id , a.author_name
+        from blog b
+        left join author a
+        on b.author_id=a.author_id
+        where b.bid = #{bid, jdbcType=INTEGER}
+    </select>
+    <!-- 嵌套查询 -->
+    <select id="selectAuthor" parameterType="int" resultType="com.lcjing.model.Author">
+        select author_id authorId, author_name authorName
+        from author where author_id = #{authorId}
+    </select>
+    <!-- 根据文章查询评论，一对多 -->
+    <select id="selectBlogWithCommentById" resultMap="BlogWithCommentMap">
+        select b.bid, b.name, b.author_id, c.comment_id, c.content
+        from blog b, comment c
+        where b.bid = c.bid
+        and b.bid = #{bid}
+    </select>
+
+    <!-- 根据作者文章评论，多对多 -->
+    <select id="selectAuthorWithBlog" resultMap="AuthorWithBlogMap">
+        select b.bid, b.name, a.author_id authorId, a.author_name authorName, c.comment_id commentId, c.content
+        from blog b, author a, comment c
+        where b.author_id = a.author_id and b.bid = c.bid
+    </select>
+
+    <select id="selectBlogList" resultMap="BaseResultMap">
+        select bid, name, author_id authorId from blog
+    </select>
+</mapper>
